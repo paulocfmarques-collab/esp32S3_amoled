@@ -1,4 +1,5 @@
 #include "EyesAnimation.h"
+#include "ScreenLayout.h"
 #include <math.h>
 
 // Conserva a animação original em coordenadas lógicas, ampliada para a AMOLED.
@@ -12,8 +13,8 @@ class EyeCanvas final {
     int size(int value) const { return max(1,int(value*scale_)); }
 public:
     explicit EyeCanvas(Arduino_Canvas& canvas) : canvas_(canvas),
-        scale_(min(canvas.width(),canvas.height())/128.0f),
-        offsetX_((canvas.width()-int(128*scale_))/2), offsetY_((canvas.height()-int(128*scale_))/2) {}
+        scale_(min(int(canvas.width()),ScreenLayout::footerTop(canvas.height())-ScreenLayout::StatusHeight)/128.0f),
+        offsetX_((canvas.width()-int(128*scale_))/2), offsetY_(ScreenLayout::StatusHeight+(ScreenLayout::footerTop(canvas.height())-ScreenLayout::StatusHeight-int(128*scale_))/2) {}
     void fillScreen(uint16_t color) { canvas_.fillScreen(color); }
     void fillRoundRect(int a,int b,int w,int h,int r,uint16_t c) { canvas_.fillRoundRect(x(a),y(b),size(w),size(h),size(r),c); }
     void fillRect(int a,int b,int w,int h,uint16_t c) { canvas_.fillRect(x(a),y(b),size(w),size(h),c); }
@@ -24,9 +25,9 @@ public:
 };
 }
 
-void EyesAnimation::draw(Arduino_Canvas& canvas, uint8_t rotation) {
+bool EyesAnimation::draw(Arduino_Canvas& canvas, uint8_t rotation) {
  const uint32_t now = millis();
- if (now - lastFrame < 33) return;
+ if (now - lastFrame < 33) return false;
  // A new screensaver session uses the current position as its neutral pose.
  if (now - lastFrame > 250) referenceReady = false;
  lastFrame = now;
@@ -121,5 +122,5 @@ void EyesAnimation::draw(Arduino_Canvas& canvas, uint8_t rotation) {
      frame.fillCircle(mouthX + dx, y, 1, 0x07FF);
    }
  }
- frame.flush();
+ return true;
 }

@@ -9,6 +9,7 @@ bool BoardHardware::begin() {
     if (!Wire.begin(BoardConfig::Sda, BoardConfig::Scl)) {
         Serial.println("[BOARD] Falha ao iniciar I2C SDA15/SCL14"); return false;
     }
+    i2cReady_ = true;
     Wire.setClock(400000); Wire.setTimeOut(30);
     Lock lock(*this);
     if (!expander_.begin(BoardConfig::ExpanderAddress)) {
@@ -68,10 +69,12 @@ bool BoardHardware::begin() {
     return displayReady_;
 }
 bool BoardHardware::readAcceleration(float* x, float* y, float* z) {
+    if(!i2cReady_)return false;
     Lock lock(*this);
     return imuReady_ && imu_.readAcceleration(*x, *y, *z);
 }
 bool BoardHardware::readRegisters(uint8_t address, uint8_t reg, uint8_t* bytes, size_t count) {
+    if(!i2cReady_ || !bytes || !count)return false;
     Lock lock(*this);
     Wire.beginTransmission(address); Wire.write(reg);
     if (Wire.endTransmission(false) != 0) return false;
@@ -82,8 +85,14 @@ bool BoardHardware::readRegisters(uint8_t address, uint8_t reg, uint8_t* bytes, 
     for (size_t i = 0; i < count; ++i) bytes[i] = Wire.read();
     return true;
 }
-bool BoardHardware::writeRegister(uint8_t address, uint8_t reg, uint8_t value) {
+bool BoardHardware::writeRegister(uint8_t address,uint8_t reg,uint8_t value) {
+    return writeRegisters(address,reg,&value,1);
+}
+bool BoardHardware::writeRegisters(uint8_t address,uint8_t reg,const uint8_t* data,size_t count) {
+    if(!i2cReady_ || !data || !count || count>31)return false;
     Lock lock(*this);
-    Wire.beginTransmission(address); Wire.write(reg); Wire.write(value);
-    return Wire.endTransmission() == 0;
+    Wire.beginTransmission(address);Wire.write(reg);
+    const bool complete=Wire.write(data,count)==count;
+    const bool accepted=Wire.endTransmission()==0;
+    return complete && accepted;
 }

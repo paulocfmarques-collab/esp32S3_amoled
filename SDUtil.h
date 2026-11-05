@@ -24,6 +24,7 @@ public:
     SDUtil(const SDUtil&) = delete;
     SDUtil& operator=(const SDUtil&) = delete;
     bool begin();
+    void end();
     bool salvarCrash(const String& relatorio, String& caminho, String& erro);
     bool test();
     String getCardType();

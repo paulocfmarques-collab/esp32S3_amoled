@@ -4,7 +4,7 @@
 class EyesAnimation final {
 public:
     explicit EyesAnimation(BoardHardware& board) : board_(board) {}
-    void draw(Arduino_Canvas& canvas, uint8_t rotation);
+    bool draw(Arduino_Canvas& canvas, uint8_t rotation);
 private:
     BoardHardware& board_;
     enum Expression : uint8_t { HAPPY, CURIOUS, SURPRISED, SLEEPY };

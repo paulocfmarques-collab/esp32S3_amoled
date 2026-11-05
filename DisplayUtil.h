@@ -5,6 +5,11 @@
 #include "BoardHardware.h"
 #include "TouchInput.h"
 #include "EyesAnimation.h"
+#include "ScreenLayout.h"
+#include "WatchFace.h"
+#include "ExperienceSettings.h"
+#include "BatteryHistory.h"
+#include "UiPainter.h"
 
 #include <vector>
 #include "ClimaManager.h"
@@ -26,11 +31,22 @@ private:
     BoardHardware& board_;
     TouchInput& touch_;
     DisplayBuffer frame_;
+    UiPainter ui_{frame_};
+    BatterySnapshot battery_{};
+    String clockSource_="SEM HORA";
     ClimaManager& climate_;
     uint8_t rotation_ = 0;
     uint16_t statusColor_ = 0x07FF;
     EyesAnimation eyes_{board_};
+    WatchFace watch_;
+    bool continuousClock_=false;
+    ExperienceSettings settings_;
+    bool nightActive_=false,settingsSaved_=true;
+    uint8_t monitorView_=0;
     void footer();
+    void header(const String& title,UiPainter::Icon icon=UiPainter::Icon::Clock);
+    void present();
+    uint8_t pageIndex_ = 0;
     void centered(const String& value, int y, uint8_t size, uint16_t color);
     bool ready_ = false;
     uint16_t appliedBrightness_ = 256;
@@ -51,6 +67,16 @@ private:
 public:
     DisplayUtil(BoardHardware& board, TouchInput& touch, ClimaManager& climate);
     bool ready() const { return ready_; }
+    ExperienceSettings& settings(){return settings_;}
+    void updateLocalHour(const String& timestamp);
+    void settingsTap(int x,int y);
+    void showSettingsPage();
+    void showBatteryHistory(const BatteryHistory& history);
+    void cycleMonitorView(){monitorView_=(monitorView_+1)%2;}
+    void setTimeSource(const char* source) { clockSource_=source; }
+    void setBatterySnapshot(const BatterySnapshot& battery) { battery_=battery; }
+    void setPageIndex(uint8_t index) { pageIndex_ = index % ScreenLayout::VisiblePages; }
+    void showPowerOff();
     void setStatusColor(uint16_t color) { statusColor_ = color; }
     void begin();
     void setMonitor(const NetworkMonitor* m){monitor_=m;}
@@ -60,6 +86,7 @@ public:
     void updatePower();
     bool idleFor(uint32_t duration) const { return millis() - lastActivity_ >= duration; }
     uint8_t brightness()const{return brightness_;}
+    uint8_t rotation()const{return rotation_;}
     void selectPage(uint8_t page){requestedPage_=page;wake();}
     void nextPage(){requestedPage_=-2;wake();}
     int takePageRequest(){int r=requestedPage_;requestedPage_=-1;return r;}
@@ -74,6 +101,8 @@ public:
     void setRotation(uint8_t rotation);
     
     void showClock(String dateTime);
+    void setContinuousClock(bool enabled);
+    void showAnalogClock(const String& timestamp,const BatterySnapshot& battery,int32_t timezone,bool dst);
     void showStatusPage(bool sdReady, bool ntpSynchronized, const String& ntpDateTime,
                         int32_t timezoneOffset, bool daylightSaving, uint8_t part = 0);
     void showNetworkPage(uint8_t part = 0);

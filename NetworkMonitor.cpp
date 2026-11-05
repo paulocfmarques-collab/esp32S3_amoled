@@ -98,6 +98,16 @@ void NetworkMonitor::update()
         }
         nextAt = now + 5000;
     }
+    if(!trendStarted_ || now-trendAt_>=10000) {
+        trendStarted_=true;trendAt_=now;
+        Trend value;
+        if(online) {
+            value.rssi=constrain(WiFi.RSSI(),-126,0);
+            if(hasResult && now-measuredAt<15000)value.latency=replied?int32_t(rtt):-1;
+        }
+        trends[trendHead]=value;trendHead=(trendHead+1)%TrendCapacity;
+        if(trendCount<TrendCapacity)++trendCount;
+    }
     if (!online || session || int32_t(now - nextAt) < 0)
         return;
     target = WiFi.gatewayIP();

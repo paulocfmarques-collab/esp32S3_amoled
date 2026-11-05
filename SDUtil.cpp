@@ -18,6 +18,11 @@ bool SDUtil::begin() {
     Serial.println(mounted_ ? "[SD] SDMMC 1 bit pronto" : "[SD] Cartao ausente ou falha de montagem");
     return mounted_;
 }
+void SDUtil::end() {
+    Lock lock(*this);
+    if (mounted_) SD_MMC.end();
+    mounted_=false; metrics_.mounted=false; metrics_.valid=false; metricsAt_=0;
+}
 String SDUtil::getCardType() {
     Lock lock(*this);
     if (!mounted_) return "ausente";

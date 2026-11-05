@@ -4,6 +4,7 @@
 #include <Arduino.h>
 
 class DisplayUtil;
+class BoardPower;
 class ClimaManager;
 class ESP32Gateway;
 class NTPUtil;
@@ -45,7 +46,7 @@ public:
     }
 
     CommandProcessor(DisplayUtil& display, ESP32Gateway& gateway, NTPUtil& ntp,
-                     RGBLed& led, SDUtil& sd, ClimaManager& climate);
+                     RGBLed& led, SDUtil& sd, ClimaManager& climate, BoardPower& power);
 
     bool begin();
     bool sdReady() const { return sdReady_; }
@@ -69,6 +70,7 @@ private:
     RGBLed& led_;
     SDUtil& sd_;
     ClimaManager& climate_;
+    BoardPower& power_;
 
     bool sdReady_ = false;
     bool serialReply_ = false;

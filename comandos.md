@@ -1,3 +1,29 @@
+## Personalization and histories (2026-11-04)
+
+- **personalizar** / **tela:12**: touch settings for watch face, accent, night schedule/intensity and motion. Hold a clock for 800 ms to open it; hold another page to return to the customized clock.
+- **relogio** / **tela:10**: selected Instrumental, Minimalist or Digital clock. Stays visible without Internet using RTC fallback, with no screensaver.
+- **historico_bateria** / **tela:11**: session battery graph, voltage and estimated autonomy. Five-minute SD archive: **sd_read:/battery_history.csv**.
+- **tela:8**: tap to switch latency/RSSI graphs; local gateway ping does not prove Internet access.
+- **tela:0..12**: page IDs 0..10 remain compatible. Night brightness defaults to 22:00–07:00, capped at 12%; edit hours/intensity by touch.
+- Motion: rest flat then lift to wake; hold an inverted portrait pose for 1.2 seconds to rotate 180 degrees. Disable through Personalize. Explicit tela_off is respected.
+
+# RTC and network time update
+
+- `ntp_status` / `rtc_status`: selected time source, valid displayed time, hardware RTC status/error, latest NTP response age and RTC corrections.
+- `time` and `date`: confirmed network time when available, otherwise the valid hardware RTC.
+- `set_time:YYYY-MM-DD HH:MM:SS`: set local wall time and persist its UTC equivalent to RTC.
+- The digital/analog clocks label NTP or RTC. A valid RTC value alone no longer reports NTP synchronization. See README.md for freshness, validation and backup-power behavior.
+
+# Battery and analog clock update
+
+- `bateria` / `battery`: charge %, used capacity %, voltage, power state and an observed discharge-rate estimate. No instantaneous mA/mW measurement is claimed.
+- `relogio` / `tela:10`: select the analog clock; this page stays selected with no screensaver or idle brightness reduction; the night schedule still applies. Swipe to leave.
+- Direct selection now accepts `tela:0..12`. Existing IDs remain unchanged.
+
+# Current navigation and power update
+
+Swipe up/left for the next page; the former bottom button and its hit area have been removed. Swipe down/right for the previous page. A tap elsewhere only wakes the screen. Hold touch to return to the clock. Short PWR requests orderly shutdown; hold PWR about 1 second to power on, or 6 seconds for emergency power-off. See README.md for supply-related behavior and validation status. This update supersedes older navigation descriptions below.
+
 # Adaptação de navegação
 
 Toque curto/deslize à esquerda: próxima página. Deslize à direita: anterior. Segure o touch por 800 ms e solte: relógio. BOOT GPIO0 mantém as ações de 3/10 segundos. Consulte LEIA-ME.md para revisão V1/V2 e configuração.
@@ -217,3 +243,11 @@ O serial informa o resultado do QMI8658 na linha [BOARD]. O sensor nao cria um c
   `tela_off` não coloca a CPU em deep sleep.
 - Esta revisão documental não confirma compilação completa, gravação ou teste
   físico das alterações locais.
+
+## AMOLED visual refresh
+
+The bottom next-page button and its touch target have been removed. Navigation is by swipes (up/left for next, down/right for previous); short taps only wake the screen and touch-hold returns to the clock. A compact top bar displays the page number, pinned-clock state, battery and Wi-Fi signal. RSSI colors are green at -60 dBm or better, amber down to -75 dBm, orange down to -85 dBm and red below that; AP mode and offline state are indicated separately.
+
+UiPainter supplies bundled proportional FreeSans fonts in several sizes, pixel-measured text fitting, vector icons and colored cards. Main pages include illustrated weather, actual ping history, RAM/PSRAM availability bars and SD utilization. Unmeasured ping samples are omitted, and timeouts are marked separately. The analog clock and animated eyes use the recovered vertical space. One buffered frame is transferred per render.
+
+No new installed graphics library is required. The font headers and upstream notices are included in UiFonts. See [font attribution](UiFonts/README.md). New UI changes still require user compilation and visual validation in portrait/landscape and over OTA.

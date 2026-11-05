@@ -4,6 +4,83 @@ All entries are in English and use ISO dates. Dates record development changes, 
 
 Entries before 2026-11-04 describe the inherited AtomS3R project. Hardware-specific behavior in those entries is historical and does not override the current Waveshare configuration.
 
+## 2026-11-04 — Personal watch faces, night mode, histories and motion
+
+- Added three native vector watch faces, four accents and a touch Personalize page with verified NVS persistence.
+- Added local-time night brightness with editable start/end hours and intensity; RTC fallback keeps the schedule and clocks working offline.
+- Added a bounded battery-session graph, honest SOC-based autonomy and rotating five-minute SD CSV archives without requiring a card for operation.
+- Expanded the network monitor with latency/RSSI trend charts, loss, average RTT and cumulative offline time; gateway reachability is labeled as LAN-only.
+- Added filtered lift-to-wake and stable, mounting-relative portrait inversion; automatic rotation is deferred during active touch/console/BOOT interactions.
+- Added personalizar and historico_bateria commands; extended direct page selection to 0..12 while preserving earlier IDs.
+- Firmware compilation, OTA upload and physical validation remain with the device owner.
+
+## 2026-11-04 — PCF85063 RTC fallback and verified NTP synchronization
+
+- Added BoardRtc at 0x51 with UTC calendar storage, coherent burst reads, BCD/calendar validation, oscillator-stop checking and verified calendar writes.
+- Added ClockCalendar utilities and guarded I2C burst writes without a new library dependency.
+- Restored valid RTC time at startup, before network synchronization is available.
+- Changed NTP validity from a plausible system date to an actual recent SNTP callback; callbacks only publish timestamps and all RTC access remains on the application task.
+- Compared RTC/network UTC on confirmed updates and once per minute while authority is fresh; differences of 2 seconds or more repair the RTC. NTP refresh is 5 minutes, freshness 10 minutes, with RTC fallback immediately when disconnected.
+- Added source badges to both clock views, unified command time selection and expanded ntp_status with the rtc_status alias.
+- Applied timezone/DST only to display; manual time also attempts RTC persistence and is labeled explicitly.
+- Invalid/missing RTC data is never accepted as a fabricated clock or proof of NTP success. Partial calendar writes remain stopped until repaired.
+- Reviewed the installed Arduino-ESP32 3.3.12 SNTP API and NXP register documentation. Compilation and physical retention/reconnection tests remain with the user.
+
+## 2026-11-04 — Gesture-only AMOLED interface and proportional typography
+
+- Removed the bottom Next Screen button and its hit area; kept swipe navigation and wake-only taps.
+- Added a compact status bar with color-coded RSSI bars, AP/offline states, battery level, page count and a pinned-clock marker.
+- Added UiPainter for bundled proportional fonts, measured text fitting, vector icons, accented cards and progress meters. Included upstream font notices in UiFonts.
+- Redesigned digital clock, network, system, saved profiles, SD, network monitor, forecast and OTA pages. Added real ping-history plots and memory/storage meters; unmeasured ping slots are not rendered as data.
+- Expanded the analog-face and eye-animation viewports and retained the analog page no-screensaver behavior.
+- Reviewed includes, removed stale button references and kept a single framebuffer flush per rendered frame. Compilation and physical visual verification remain with the user.
+
+## 2026-11-04 — Battery telemetry and persistent analog watch face
+
+### Added
+
+- BatterySnapshot and BoardPower sampling for battery presence, charging/discharging state, USB supply, native fuel-gauge percentage and battery-voltage ADC readings.
+- `bateria` / `battery` commands, reporting remaining charge, used capacity relative to 100%, voltage and estimated percentage-point discharge rate after a sufficient observation interval. No instantaneous current/power measurement is fabricated.
+- A native WatchFace class inspired by the supplied inner-dial reference, with hour/minute/second hands and central time/date/battery/weather information.
+- `relogio` and `tela:10` to select the ninth distinct display page; existing page IDs remain unchanged.
+
+### Changed
+
+- The analog clock stays selected without automatic return, screensaver or idle dimming. Manual brightness, page navigation and OTA remain functional.
+- Updated direct page selection to accept IDs 0–10 and the footer to show nine page indicators.
+- Enabled battery detection and the voltage ADC without modifying charging-current, voltage-target or fuel-gauge calibration settings.
+
+### Validation
+
+- Source integration reviewed; compilation, on-device gauge validity and the dial appearance remain for user validation.
+
+## 2026-11-04 — Arduino IDE wireless upload configuration
+
+- Explicitly enabled ArduinoOTA mDNS advertising, port 3232 and reboot after successful uploads.
+- Set the OTA transfer timeout to 8 seconds.
+- Added startup diagnostics for the destination partition, available image size, hostname and station IP.
+- Added OTA.md with the USB-first installation flow and Arduino IDE network-port instructions. The last cached build used app3M_fat9M_16MB, with two 3 MiB application partitions.
+- Actual compilation/upload validation remains with the user.
+
+## 2026-11-04 — Full-screen UI, vertical navigation and power key
+
+### Added
+
+- Shared ScreenLayout geometry for the bottom navigation button and rotation-aware touch hit testing.
+- Up-swipe/left-swipe next-page navigation and down-swipe/right-swipe previous-page navigation. Body taps wake without switching pages.
+- Persistent bottom Next Screen button, eight page indicators, larger clock digits and adaptive rows using the available content height.
+- BoardPower for AXP2101 power-key polling, checked register updates, a 1-second power-on threshold and a 6-second emergency hardware-off threshold. No additional library dependency or charge/rail-voltage changes.
+- Orderly short-PWR shutdown that pauses touch/new weather work and unmounts SD before requesting PMIC power-off; startup key-event suppression and a diagnostic/recovery path if the CPU remains supplied.
+
+### Changed
+
+- Reserved navigation-bar space below the screensaver and retained one framebuffer transfer per animation frame.
+- Disabled the temporary startup color test by default.
+
+### Validation
+
+- User confirmed that the V2 display now works. The new layout, gestures and PMU power-off/on still require compilation and physical testing by the user, including battery-only operation.
+
 ## 2026-11-04 — Select confirmed V2 hardware and migrate the IMU API
 
 - Confirmed CO5300/CST820 V2 from the supplied product-label photo and selected revision 2 by default.

@@ -12,7 +12,7 @@
 class BoardConfig final {
 public:
     // Temporary startup diagnostic: draws directly, without the PSRAM canvas.
-    static constexpr bool DisplayStartupTest = true;
+    static constexpr bool DisplayStartupTest = false;
     static constexpr int Width = 368, Height = 448;
     static constexpr int LcdCs = 12, LcdClock = 11;
     static constexpr int LcdD0 = 4, LcdD1 = 5, LcdD2 = 6, LcdD3 = 7;

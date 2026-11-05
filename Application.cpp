@@ -7,6 +7,7 @@ void Application::begin() {
   climate_.begin(); // Reserve the persistent weather worker before network allocations.
 
   const bool boardReady = board_.begin();
+  if (boardReady) power_.begin();
   display.begin();
   if (boardReady && !touch_.begin()) Serial.println("[TOUCH] Indisponivel; use BOOT ou tela_next");
   sdDisponivel = commandProcessor.begin();
@@ -33,28 +34,50 @@ uint8_t Application::adjacentPage(uint8_t page, int direction) const {
     return page;
 }
 void Application::handleTouch() {
-    TouchInput::Gesture gesture;
-    while (touch_.poll(gesture)) {
+    TouchInput::Event event;
+    while (touch_.poll(event)) {
+        const auto gesture=event.gesture;
         if (gesture == TouchInput::Gesture::Down) {
-            touchWakeOnly_ = display.idleFor(60000) || display.brightness() == 0;
+            touchWakeOnly_ = (currentPage != PAGE_ANALOG && display.idleFor(60000)) || display.brightness() == 0;
             if (display.brightness() == 0) display.setBacklight(80);
-            display.wake(); tempoUltimoComando = millis();
+            display.wake(); tempoUltimoComando = millis(); lastNavigationAt = millis();
             continue;
         }
         if (touchWakeOnly_) { touchWakeOnly_ = false; continue; }
         switch (gesture) {
-        case TouchInput::Gesture::Home: currentPage = PAGE_CLOCK; break;
+        case TouchInput::Gesture::Home: currentPage = (currentPage==PAGE_CLOCK || currentPage==PAGE_ANALOG)?PAGE_SETTINGS:PAGE_ANALOG; break;
         case TouchInput::Gesture::Previous: currentPage = adjacentPage(currentPage,-1); break;
-        case TouchInput::Gesture::Tap: case TouchInput::Gesture::Next:
+        case TouchInput::Gesture::Tap:
+            if(currentPage==PAGE_SETTINGS)display.settingsTap(event.x,event.y);
+            else if(currentPage==PAGE_MONITOR)display.cycleMonitorView();
+            else continue;
+            break;
+        case TouchInput::Gesture::Next:
             currentPage = adjacentPage(currentPage); break;
         default: continue;
         }
         display.wake(); lastNavigationAt = millis();
-        returnToClockArmed = currentPage != PAGE_CLOCK;
+        returnToClockArmed = currentPage != PAGE_CLOCK && currentPage != PAGE_ANALOG && currentPage != PAGE_SETTINGS;
         consoleVisible = false; lastFrame = millis()-1000;
     }
 }
 void Application::tick() {
+  if (power_.takeShutdownRequest()) { shutdown(); return; }
+  ntp.update();
+  display.setTimeSource(ntp.sourceLabel());
+  power_.updateBattery();
+  const auto battery=power_.batterySnapshot();
+  display.setBatterySnapshot(battery);
+  if(!lastClockRead_ || millis()-lastClockRead_>=1000) {
+    lastClockRead_=millis();clockTimestamp_=ntp.getDateTime(0);
+    display.updateLocalHour(clockTimestamp_);
+  }
+  if(batteryHistory_.update(battery) && commandProcessor.sdReady())
+    batteryHistory_.archive(sd,clockTimestamp_,battery);
+  const auto movement=motion_.update(display.settings().motionEnabled,display.rotation());
+  if(movement.wake && display.brightness()>0) {
+    display.wake();tempoUltimoComando=millis();lastFrame=millis()-1000;
+  }
   String comando;
 
   // Handle the OTA invitation and transfer before HTTP rendering and peripherals.
@@ -67,7 +90,10 @@ void Application::tick() {
   }
 
   handleTouch();
-  display.updatePower();
+  if(movement.rotation>=0 && buttonState!=LOW && !consoleVisible && !touch_.contactActive()) {
+    display.setRotation(uint8_t(movement.rotation));lastFrame=millis()-1000;
+  }
+
   gateway.handleClient();
   commandProcessor.update();  
 
@@ -91,7 +117,7 @@ void Application::tick() {
       Serial.printf("[STATUS] Core=%d WiFi=%s Heap=%u\n", xPortGetCoreID(), WiFi.status() == WL_CONNECTED ? "OK" : "offline", ESP.getFreeHeap());
       currentPage = adjacentPage(currentPage);
       lastNavigationAt = millis();
-      returnToClockArmed = currentPage != PAGE_CLOCK;
+      returnToClockArmed = currentPage != PAGE_CLOCK && currentPage != PAGE_ANALOG && currentPage != PAGE_SETTINGS;
       consoleVisible = false;
       lastFrame = millis() - 1000;
       tempoUltimoComando = millis();
@@ -165,17 +191,21 @@ void Application::tick() {
   if (request != -1) {
     currentPage = request == -2 ? adjacentPage(currentPage) : request % PAGE_COUNT;
     lastNavigationAt = millis();
-    returnToClockArmed = currentPage != PAGE_CLOCK;
+    returnToClockArmed = currentPage != PAGE_CLOCK && currentPage != PAGE_ANALOG && currentPage != PAGE_SETTINGS;
     consoleVisible = false; lastFrame = millis() - 1000;
   }
-  if (returnToClockArmed && buttonState != LOW && millis() - lastNavigationAt >= 20000UL) {
+  if (returnToClockArmed && currentPage != PAGE_ANALOG && buttonState != LOW && millis() - lastNavigationAt >= 20000UL) {
     currentPage = PAGE_CLOCK;
     returnToClockArmed = false;
     consoleVisible = false;
     lastFrame = millis() - 1000;
   }
   if (consoleVisible && int32_t(millis() - consoleUntil) >= 0) consoleVisible = false;
-  const bool idle = buttonState != LOW && !consoleVisible && display.idleFor(60000);
+  static constexpr uint8_t positions[PAGE_COUNT] = {0,1,1,2,2,3,4,5,6,7,8,9,10};
+  display.setPageIndex(positions[currentPage]);
+  display.setContinuousClock(currentPage==PAGE_ANALOG);
+  display.updatePower();
+  const bool idle = currentPage != PAGE_ANALOG && buttonState != LOW && !consoleVisible && display.idleFor(60000);
   if (idle) {
     screensaverActive = true;
     display.desenharOlhosScreensaver();
@@ -186,10 +216,13 @@ void Application::tick() {
   }
   if (!idle && buttonState != LOW && !consoleVisible && millis() - lastFrame >= 1000) {
     lastFrame = millis();
+    const String clockTime=ntp.getDateTime(0);
+    display.setTimeSource(ntp.sourceLabel());
     switch (currentPage) {
-      case PAGE_CLOCK: display.showClock(ntp.getDateTime(10)); break;
+      case PAGE_CLOCK: display.showClock(clockTime); break;
+      case PAGE_ANALOG: display.showAnalogClock(clockTime,power_.batterySnapshot(),ntp.getFusoHora(),ntp.isDstAtivo()); break;
       case PAGE_NTP_1: case PAGE_NTP_2:
-        display.showStatusPage(sdDisponivel, ntp.isSincronizado(), ntp.getDateTime(10), ntp.getFusoHora(), ntp.isDstAtivo()); break;
+        display.showStatusPage(sdDisponivel, ntp.isSincronizado(), clockTime, ntp.getFusoHora(), ntp.isDstAtivo()); break;
       case PAGE_NET_1: case PAGE_NET_2: display.showNetworkPage(); break;
       case PAGE_SYS: display.showSystemPage(); break;
       case PAGE_WIFI: {
@@ -199,14 +232,36 @@ void Application::tick() {
       }
       case PAGE_SD: {
         const auto card = sd.metricsSnapshot();
-        display.showSdPage(sdDisponivel,sd.getCardType(),card.capacity,card.used); break;
+        display.showSdPage(sdDisponivel,sd.getCardType(),card.valid?card.total:card.capacity,card.used); break;
       }
       case PAGE_MONITOR: display.showMonitorPage(); break;
       case PAGE_FORECAST: display.showForecastPage(); break;
+      case PAGE_BATTERY: display.showBatteryHistory(batteryHistory_); break;
+      case PAGE_SETTINGS: display.showSettingsPage(); break;
     }
   }
   vTaskDelay(pdMS_TO_TICKS(5));
 
+}
+void Application::shutdown() {
+    Serial.println("[POWER] Encerrando SD e solicitando desligamento ao AXP2101");
+    climate_.pauseForOta(true);
+    touch_.pause(true);
+    display.showPowerOff();
+    sd.end(); // Wait for in-flight file operations, then unmount before the PMU cuts power.
+    sdDisponivel=false;
+    vTaskDelay(pdMS_TO_TICKS(250));
+    display.setBacklight(0);
+    const bool accepted=power_.shutdown();
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    // If execution continues, the PMU did not remove the MCU supply (e.g. external power).
+    Serial.printf("[POWER] CPU ainda ativa; comando=%s. Segure PWR por 6s.\n",accepted?"ACK":"falha I2C");
+    sdDisponivel=commandProcessor.begin();
+    touch_.pause(false);
+    climate_.pauseForOta(false);
+    display.setBacklight(80);
+    display.showHoldMessage("ENERGIA AINDA ATIVA","Segure PWR por 6s",0xFFE0);
+    consoleVisible=true; consoleUntil=millis()+5000;
 }
 void Application::run(void* context) {
     auto& self = *static_cast<Application*>(context);

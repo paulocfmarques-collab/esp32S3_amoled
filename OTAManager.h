@@ -2,6 +2,7 @@
 #include <ArduinoOTA.h>
 #include <WiFi.h>
 #include <esp32-hal-cpu.h>
+#include <esp_ota_ops.h>
 #include "ClimaManager.h"
 #include "DisplayUtil.h"
 
@@ -28,6 +29,10 @@ public:
  explicit OTAManager(DisplayUtil& displayRef, ClimaManager& climate) : display(displayRef), climate_(climate) {}
  void begin(const char* hostname = "AMOLED-Gateway") {
    ArduinoOTA.setHostname(hostname);
+   ArduinoOTA.setPort(3232);
+   ArduinoOTA.setMdnsEnabled(true); // Advertise the network upload port to Arduino IDE.
+   ArduinoOTA.setRebootOnSuccess(true);
+   ArduinoOTA.setTimeout(8000);
    WiFi.setSleep(false);
    ArduinoOTA.onStart([this]() {
      active_ = true;
@@ -71,7 +76,16 @@ public:
      Serial.printf("[OTA] Erro %u; retomando servicos\n", error);
      finish();
    });
+   const esp_partition_t* running = esp_ota_get_running_partition();
+   const esp_partition_t* target = esp_ota_get_next_update_partition(nullptr);
+   if (!target || (running && target->address == running->address)) {
+     Serial.println("[OTA] Sem particao de destino. Grave por USB um esquema com duas APPs e OTA.");
+   } else {
+     Serial.printf("[OTA] Destino: %s, limite %u bytes\n", target->label, unsigned(target->size));
+   }
    ArduinoOTA.begin();
+   Serial.printf("[OTA] IDE Arduino: %s em %s, porta 3232; anuncio mDNS habilitado\n",
+                 hostname, WiFi.localIP().toString().c_str());
  }
  void handle() {
    // The first call accepts a pending invitation; the second starts it immediately.

@@ -15,6 +15,11 @@ class NetworkMonitor
     String events[3];
     int history[24];
     uint8_t head = 0;
+    struct Trend {int16_t rssi=-127;int32_t latency=-2;};
+    static constexpr int TrendCapacity=120;
+    int trendCount=0,trendHead=0;
+    Trend trends[TrendCapacity]{};
+    const Trend& trendAt(int i) const {return trends[(trendHead+TrendCapacity-trendCount+i)%TrendCapacity];}
     void begin();
     void update();
 
@@ -24,6 +29,7 @@ class NetworkMonitor
     }
 
   private:
+    uint32_t trendAt_=0;bool trendStarted_=false;
     uint32_t offlineAt = 0, tickAt = 0, nextAt = 0, epoch = 0, sessionEpoch = 0;
     esp_ping_handle_t session = nullptr;
     IPAddress target;

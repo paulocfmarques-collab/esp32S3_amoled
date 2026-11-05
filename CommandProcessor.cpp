@@ -6,6 +6,8 @@
 #include "SDUtil.h"
 #include "ClimaManager.h"
 #include "CrashDiagnostics.h"
+#include "BoardPower.h"
+#include "ScreenLayout.h"
 
 #include <WiFi.h>
 #include <esp_system.h>
@@ -13,8 +15,8 @@
 #include <Preferences.h>
 
 CommandProcessor::CommandProcessor(DisplayUtil& display, ESP32Gateway& gateway, NTPUtil& ntp,
-                                   RGBLed& led, SDUtil& sd, ClimaManager& climate)
-    : display_(display), gateway_(gateway), ntp_(ntp), led_(led), sd_(sd), climate_(climate)
+                                   RGBLed& led, SDUtil& sd, ClimaManager& climate, BoardPower& power)
+    : display_(display), gateway_(gateway), ntp_(ntp), led_(led), sd_(sd), climate_(climate), power_(power)
 {
 }
 
@@ -116,7 +118,12 @@ void CommandProcessor::executeCommand(String command, bool fromSerial)
                   "wifi_list\n"
                   "net_monitor\n"
                   "net_history\n"
-                  "tela:0..9\n"
+                  "bateria\n"
+                  "battery\n"
+                  "relogio\n"
+                  "personalizar\n"
+                  "historico_bateria\n"
+                  "tela:0..12\n"
                   "tela_next\n"
                   "rotacao:0|90|180|270\n"
                   "brilho:0..100\n"
@@ -133,6 +140,7 @@ void CommandProcessor::executeCommand(String command, bool fromSerial)
                   "time\n"
                   "date\n"
                   "ntp_status\n"
+                  "rtc_status\n"
                   "set_fuso:X\n"
                   "dst_on\n"
                   "dst_off\n"
@@ -188,6 +196,21 @@ void CommandProcessor::executeCommand(String command, bool fromSerial)
     else if (command == "net_history")
         answerAll(sdReady_ ? sd_.readTail("/network_history.log", 2000) : "SD indisponivel\n",
                   false);
+    else if (command == "bateria" || command == "battery")
+        answerAll(power_.batteryReport(), false);
+    else if (command == "relogio")
+    {
+        display_.selectPage(ScreenLayout::AnalogPage);
+        answerAll("Mostrador personalizado fixo; deslize para sair\n", false);
+    }
+    else if (command == "personalizar") {
+        display_.selectPage(ScreenLayout::SettingsPage);
+        answerAll("Toque nos cartoes para personalizar; segure para ver o relogio\n",false);
+    }
+    else if (command == "historico_bateria") {
+        display_.selectPage(ScreenLayout::BatteryPage);
+        answerAll("Historico de bateria desta sessao; CSV no SD quando disponivel\n",false);
+    }
     else if (command == "tela_next")
     {
         display_.nextPage();
@@ -196,14 +219,16 @@ void CommandProcessor::executeCommand(String command, bool fromSerial)
     else if (command.startsWith("tela:"))
     {
         String arg = command.substring(5);
-        bool valid = arg.length() == 1 && arg[0] >= '0' && arg[0] <= '9';
+        bool valid = arg.length()>0 && arg.length()<=2;
+        for(size_t i=0;i<arg.length();++i) if(!isDigit(arg[i]))valid=false;
+        valid=valid && arg.toInt()<=ScreenLayout::LastPage;
         if (valid)
         {
             display_.selectPage(arg.toInt());
             answerAll("Pagina selecionada\n", false);
         }
         else
-            answerAll("Uso: tela:0..9\n", false);
+            answerAll("Uso: tela:0..12\n", false);
     }
     else if (name == "rotacao")
     {
@@ -336,7 +361,8 @@ void CommandProcessor::executeCommand(String command, bool fromSerial)
         String statusWifi = (WiFi.status() == WL_CONNECTED) ? "OK" : "FALHA";
         uint32_t heapKB = ESP.getFreeHeap() / 1024;
         message = "AMOLED\nWiFi: " + statusWifi +
-                  "\nNTP: " + (ntp_.isSincronizado() ? "OK" : "FALHA") +
+                  "\nFonte hora: " + String(ntp_.sourceLabel()) +
+                  "\nNTP: " + (ntp_.isSincronizado() ? "OK" : "SEM RESPOSTA RECENTE") +
                   "\nHeap: " + String(heapKB) + " KB\n";
         answerAll(message);
     }
@@ -553,27 +579,8 @@ void CommandProcessor::executeCommand(String command, bool fromSerial)
 
         answerAll(String(buffer));
     }
-    else if (command == "ntp_status")
-    {
-        bool sincronizado = ntp_.isSincronizado();
-
-        message = "===== NTP STATUS =====\n"
-                  "Estado: ";
-
-        message += sincronizado ? "SINCRONIZADO\n" : "SEM SINCRONISMO\n";
-
-        if (sincronizado)
-        {
-            String dataHora;
-            ntp_.getDateTime(dataHora, 100);
-
-            message += "Data/Hora: " + dataHora + "\n";
-        }
-
-        message += "======================\n";
-
-        answerAll(message);
-    }
+    else if (command == "ntp_status" || command == "rtc_status")
+        answerAll(ntp_.statusReport(),false);
     else if (command == "mac")
     {
         answerAll("MAC: " + WiFi.macAddress() + "\n");
